@@ -4,163 +4,54 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Using Claude Code as a Subprocess Provider for Automated Code Review</title>
-<style>
-  :root {
-    --bg: #fafafa;
-    --fg: #1a1a1a;
-    --muted: #666;
-    --border: #e0e0e0;
-    --code-bg: #f0f0f0;
-    --accent: #2563eb;
-    --block-bg: #f5f5f5;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #111;
-      --fg: #e0e0e0;
-      --muted: #999;
-      --border: #333;
-      --code-bg: #1a1a1a;
-      --accent: #60a5fa;
-      --block-bg: #181818;
-    }
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-    background: var(--bg);
-    color: var(--fg);
-    line-height: 1.7;
-    padding: 3rem 1.5rem;
-    max-width: 720px;
-    margin: 0 auto;
-  }
-  h1 {
-    font-size: 1.8rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    margin-bottom: 0.5rem;
-    line-height: 1.3;
-  }
-  .meta {
-    color: var(--muted);
-    font-size: 0.85rem;
-    margin-bottom: 2.5rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-  h2 {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-top: 2.5rem;
-    margin-bottom: 0.75rem;
-    letter-spacing: -0.01em;
-  }
-  p {
-    margin-bottom: 1rem;
-    color: var(--fg);
-  }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  code {
-    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
-    font-size: 0.85em;
-    background: var(--code-bg);
-    padding: 0.15em 0.4em;
-    border-radius: 3px;
-  }
-  pre {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1.2rem 1.4rem;
-    overflow-x: auto;
-    margin: 1rem 0 1.5rem;
-    font-size: 0.82rem;
-    line-height: 1.6;
-  }
-  pre code {
-    background: none;
-    padding: 0;
-    font-size: inherit;
-  }
-  .callout {
-    background: var(--block-bg);
-    border-left: 3px solid var(--accent);
-    padding: 1rem 1.2rem;
-    margin: 1.5rem 0;
-    border-radius: 0 6px 6px 0;
-    font-size: 0.92rem;
-  }
-  .callout p:last-child { margin-bottom: 0; }
-  ul, ol {
-    margin: 0.5rem 0 1.5rem 1.5rem;
-  }
-  li {
-    margin-bottom: 0.4rem;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0 1.5rem;
-    font-size: 0.88rem;
-  }
-  th, td {
-    text-align: left;
-    padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-  }
-  th {
-    font-weight: 600;
-    font-size: 0.82rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--muted);
-  }
-  .back {
-    display: inline-block;
-    margin-bottom: 2rem;
-    color: var(--muted);
-    font-size: 0.85rem;
-  }
-  .back:hover { color: var(--fg); }
-  hr {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 2.5rem 0;
-  }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="article.css">
 </head>
 <body>
+<div class="container">
 
-<a href="/" class="back">&larr; Back</a>
+<a class="back" href="/">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  Back to research
+</a>
 
-<h1>Using Claude Code as a Subprocess Provider for Automated Code Review</h1>
-<div class="meta">March 2026 &middot; Architecture pattern for multi-provider AI tooling</div>
+<header class="article-header">
+  <h1>Using Claude Code as a Subprocess Provider for Automated Code Review</h1>
+  <div class="article-meta">
+    <span class="tag">Claude Code</span>
+    <span class="tag">architecture</span>
+    <span class="tag">code review</span>
+    <span>March 2026</span>
+  </div>
+</header>
+
+<p class="lede">Spawning Claude Code CLI as a child process in Node.js, treating it as an interchangeable provider alongside OpenAI and Anthropic APIs behind a single <code>complete()</code> interface.</p>
 
 <p>When building an AI-powered code review tool, you typically integrate with LLM APIs: OpenAI, Anthropic, OpenRouter. But Claude Code presents an interesting option &mdash; a fully agentic coding assistant that can read files, search codebases, and reason about code, all packaged as a CLI tool. The question is: how do you treat a CLI subprocess as just another provider in a unified API abstraction?</p>
 
-<p>This post documents the pattern we arrived at for spawning Claude Code as a child process in a Node.js application, making it interchangeable with HTTP-based API providers behind a single <code>complete()</code> interface.</p>
+<p>This post documents the pattern I arrived at for spawning Claude Code as a child process in a Node.js application, making it interchangeable with HTTP-based API providers behind a single <code>complete()</code> interface.</p>
 
 <h2>The provider abstraction</h2>
 
 <p>The core idea is a single function signature that all providers implement:</p>
 
-<pre><code>interface CompletionRequest {
-  config: ProviderConfig;
-  system: string;
-  messages: Message[];
-  tools?: ToolDefinition[];
-  maxTokens: number;
+<pre><code><span class="kw">interface</span> <span class="ty">CompletionRequest</span> {
+  config: <span class="ty">ProviderConfig</span>;
+  system: <span class="ty">string</span>;
+  messages: <span class="ty">Message</span>[];
+  tools?: <span class="ty">ToolDefinition</span>[];
+  maxTokens: <span class="ty">number</span>;
 }
 
-interface CompletionResponse {
-  text: string;
-  toolCalls: ToolCall[];
-  usage: { input: number; output: number };
+<span class="kw">interface</span> <span class="ty">CompletionResponse</span> {
+  text: <span class="ty">string</span>;
+  toolCalls: <span class="ty">ToolCall</span>[];
+  usage: { input: <span class="ty">number</span>; output: <span class="ty">number</span> };
 }
 
-async function complete(req: CompletionRequest): Promise&lt;CompletionResponse&gt;</code></pre>
+<span class="kw">async function</span> <span class="fn">complete</span>(req: <span class="ty">CompletionRequest</span>): <span class="ty">Promise</span>&lt;<span class="ty">CompletionResponse</span>&gt;</code></pre>
 
 <p>For OpenAI and Anthropic, <code>complete()</code> makes an HTTP request to their respective APIs. For Claude Code, it spawns a subprocess. The caller doesn't know or care which path is taken.</p>
 
@@ -170,22 +61,22 @@ async function complete(req: CompletionRequest): Promise&lt;CompletionResponse&g
 
 <p>The solution is to check well-known install locations in priority order:</p>
 
-<pre><code>function findClaude(): string {
-  const home = os.homedir();
-  const candidates = [
-    path.join(home, ".local/bin/claude"),
-    path.join(home, ".claude/local/claude"),
-    path.join(home, ".npm-global/bin/claude"),
-    "/usr/local/bin/claude",
-    "/opt/homebrew/bin/claude",
+<pre><code><span class="kw">function</span> <span class="fn">findClaude</span>(): <span class="ty">string</span> {
+  <span class="kw">const</span> home = os.<span class="fn">homedir</span>();
+  <span class="kw">const</span> candidates = [
+    path.<span class="fn">join</span>(home, <span class="st">".local/bin/claude"</span>),
+    path.<span class="fn">join</span>(home, <span class="st">".claude/local/claude"</span>),
+    path.<span class="fn">join</span>(home, <span class="st">".npm-global/bin/claude"</span>),
+    <span class="st">"/usr/local/bin/claude"</span>,
+    <span class="st">"/opt/homebrew/bin/claude"</span>,
   ];
 
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
+  <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> candidates) {
+    <span class="kw">if</span> (fs.<span class="fn">existsSync</span>(p)) <span class="kw">return</span> p;
   }
 
-  // Fallback: assume it's on PATH (works in terminal contexts)
-  return "claude";
+  <span class="cm">// Fallback: assume it's on PATH (works in terminal contexts)</span>
+  <span class="kw">return</span> <span class="st">"claude"</span>;
 }</code></pre>
 
 <p>This same pattern applies to finding <code>node</code> itself if your GUI app needs to spawn Node processes &mdash; check Volta, nvm, fnm, and Homebrew install paths before falling back to PATH resolution.</p>
@@ -208,73 +99,74 @@ async function complete(req: CompletionRequest): Promise&lt;CompletionResponse&g
 
 <p>Here's the core of the subprocess interaction:</p>
 
-<pre><code>const claudeBin = findClaude();
+<pre><code><span class="kw">const</span> claudeBin = <span class="fn">findClaude</span>();
 
-const args = [
-  "--output-format", "stream-json",
-  "--input-format", "stream-json",
-  "--permission-prompt-tool", "stdio",
-  "--permission-mode", "dontAsk",
-  "--allowedTools", "Read,Grep,Glob",
-  "--verbose",
-  "--append-system-prompt", systemPrompt,
+<span class="kw">const</span> args = [
+  <span class="st">"--output-format"</span>, <span class="st">"stream-json"</span>,
+  <span class="st">"--input-format"</span>, <span class="st">"stream-json"</span>,
+  <span class="st">"--permission-prompt-tool"</span>, <span class="st">"stdio"</span>,
+  <span class="st">"--permission-mode"</span>, <span class="st">"dontAsk"</span>,
+  <span class="st">"--allowedTools"</span>, <span class="st">"Read,Grep,Glob"</span>,
+  <span class="st">"--verbose"</span>,
+  <span class="st">"--append-system-prompt"</span>, systemPrompt,
 ];
 
-const proc = spawn(claudeBin, args, {
+<span class="kw">const</span> proc = <span class="fn">spawn</span>(claudeBin, args, {
   env: filteredEnv,
-  stdio: ["pipe", "pipe", "pipe"],
+  stdio: [<span class="st">"pipe"</span>, <span class="st">"pipe"</span>, <span class="st">"pipe"</span>],
 });
 
-// Send the user prompt
-const userMessage = JSON.stringify({
-  type: "user",
-  message: { role: "user", content: userPrompt },
+<span class="cm">// Send the user prompt</span>
+<span class="kw">const</span> userMessage = <span class="ty">JSON</span>.<span class="fn">stringify</span>({
+  type: <span class="st">"user"</span>,
+  message: { role: <span class="st">"user"</span>, content: userPrompt },
 });
-proc.stdin.write(userMessage + "\n");
-proc.stdin.end();</code></pre>
+proc.stdin.<span class="fn">write</span>(userMessage + <span class="st">"\n"</span>);
+proc.stdin.<span class="fn">end</span>();</code></pre>
 
 <p>Then read events from stdout:</p>
 
-<pre><code>let resultText = "";
-let lastAssistantText = "";
+<pre><code><span class="kw">let</span> resultText = <span class="st">""</span>;
+<span class="kw">let</span> lastAssistantText = <span class="st">""</span>;
 
-for await (const line of readLines(proc.stdout)) {
-  const event = JSON.parse(line);
+<span class="kw">for await</span> (<span class="kw">const</span> line <span class="kw">of</span> <span class="fn">readLines</span>(proc.stdout)) {
+  <span class="kw">const</span> event = <span class="ty">JSON</span>.<span class="fn">parse</span>(line);
 
-  switch (event.type) {
-    case "assistant": {
-      // Collect text blocks
-      for (const block of event.message?.content ?? []) {
-        if (block.type === "text") {
+  <span class="kw">switch</span> (event.type) {
+    <span class="kw">case</span> <span class="st">"assistant"</span>: {
+      <span class="cm">// Collect text blocks</span>
+      <span class="kw">for</span> (<span class="kw">const</span> block <span class="kw">of</span> event.message?.content ?? []) {
+        <span class="kw">if</span> (block.type === <span class="st">"text"</span>) {
           lastAssistantText += block.text;
         }
       }
-      break;
+      <span class="kw">break</span>;
     }
 
-    case "control_request": {
-      // Auto-approve permission requests
-      const response = JSON.stringify({
-        type: "control_response",
+    <span class="kw">case</span> <span class="st">"control_request"</span>: {
+      <span class="cm">// Auto-approve permission requests</span>
+      <span class="kw">const</span> response = <span class="ty">JSON</span>.<span class="fn">stringify</span>({
+        type: <span class="st">"control_response"</span>,
         response: {
-          subtype: "success",
+          subtype: <span class="st">"success"</span>,
           request_id: event.request_id,
-          response: { behavior: "allow", updatedInput: {} },
+          response: { behavior: <span class="st">"allow"</span>, updatedInput: {} },
         },
       });
-      proc.stdin.write(response + "\n");
-      break;
+      proc.stdin.<span class="fn">write</span>(response + <span class="st">"\n"</span>);
+      <span class="kw">break</span>;
     }
 
-    case "result": {
+    <span class="kw">case</span> <span class="st">"result"</span>: {
       resultText = event.result;
-      break;
+      <span class="kw">break</span>;
     }
   }
 }</code></pre>
 
 <div class="callout">
-<p><strong>Note on stdin lifecycle:</strong> After writing the user prompt, call <code>proc.stdin.end()</code> to signal that input is complete. However, if you need to handle <code>control_request</code> events (permission prompts), keep stdin open and only close it after receiving the <code>result</code> event. The implementation above simplifies this &mdash; in practice, you may need to defer <code>stdin.end()</code>.</p>
+<div class="callout-title">Note on stdin lifecycle</div>
+<p>After writing the user prompt, call <code>proc.stdin.end()</code> to signal that input is complete. However, if you need to handle <code>control_request</code> events (permission prompts), keep stdin open and only close it after receiving the <code>result</code> event. The implementation above simplifies this &mdash; in practice, you may need to defer <code>stdin.end()</code>.</p>
 </div>
 
 <h2>The tool handling asymmetry</h2>
@@ -285,45 +177,45 @@ for await (const line of readLines(proc.stdout)) {
 
 <p>This means your analysis pipeline needs to branch:</p>
 
-<pre><code>async function analyzeCode(
-  config: ProviderConfig,
-  systemPrompt: string,
-  messages: Message[],
-): Promise&lt;string&gt; {
-  if (config.provider === "claudecode") {
-    // Single call. Claude Code handles tools internally.
-    const response = await complete({
+<pre><code><span class="kw">async function</span> <span class="fn">analyzeCode</span>(
+  config: <span class="ty">ProviderConfig</span>,
+  systemPrompt: <span class="ty">string</span>,
+  messages: <span class="ty">Message</span>[],
+): <span class="ty">Promise</span>&lt;<span class="ty">string</span>&gt; {
+  <span class="kw">if</span> (config.provider === <span class="st">"claudecode"</span>) {
+    <span class="cm">// Single call. Claude Code handles tools internally.</span>
+    <span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">complete</span>({
       config,
       system: systemPrompt,
       messages,
-      maxTokens: 16384,
+      maxTokens: <span class="nu">16384</span>,
     });
-    return response.text;
+    <span class="kw">return</span> response.text;
   }
 
-  // API providers: explicit multi-turn tool loop
-  const history = [...messages];
-  for (let turn = 0; turn &lt; 10; turn++) {
-    const response = await complete({
+  <span class="cm">// API providers: explicit multi-turn tool loop</span>
+  <span class="kw">const</span> history = [...messages];
+  <span class="kw">for</span> (<span class="kw">let</span> turn = <span class="nu">0</span>; turn &lt; <span class="nu">10</span>; turn++) {
+    <span class="kw">const</span> response = <span class="kw">await</span> <span class="fn">complete</span>({
       config,
       system: systemPrompt,
       messages: history,
       tools: TOOL_DEFINITIONS,
-      maxTokens: 16384,
+      maxTokens: <span class="nu">16384</span>,
     });
 
-    if (response.toolCalls.length === 0) {
-      return response.text;
+    <span class="kw">if</span> (response.toolCalls.length === <span class="nu">0</span>) {
+      <span class="kw">return</span> response.text;
     }
 
-    // Execute tool calls and add results to history
-    for (const call of response.toolCalls) {
-      const result = await executeTool(call);
-      history.push({ role: "tool", toolCallId: call.id, content: result });
+    <span class="cm">// Execute tool calls and add results to history</span>
+    <span class="kw">for</span> (<span class="kw">const</span> call <span class="kw">of</span> response.toolCalls) {
+      <span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">executeTool</span>(call);
+      history.<span class="fn">push</span>({ role: <span class="st">"tool"</span>, toolCallId: call.id, content: result });
     }
   }
 
-  return history[history.length - 1].content;
+  <span class="kw">return</span> history[history.length - <span class="nu">1</span>].content;
 }</code></pre>
 
 <p>The key detail: when calling Claude Code, you omit the <code>tools</code> parameter entirely. It has its own tools and will use them as it sees fit, constrained by <code>--allowedTools</code>.</p>
@@ -342,8 +234,8 @@ for await (const line of readLines(proc.stdout)) {
 
 <p>The fix is to strip this variable before spawning:</p>
 
-<pre><code>const filteredEnv = { ...process.env };
-delete filteredEnv.CLAUDECODE;</code></pre>
+<pre><code><span class="kw">const</span> filteredEnv = { ...process.env };
+<span class="kw">delete</span> filteredEnv.CLAUDECODE;</code></pre>
 
 <p>Without this, the subprocess will detect it's "nested" and may refuse to start or behave differently.</p>
 
@@ -355,19 +247,19 @@ delete filteredEnv.CLAUDECODE;</code></pre>
 
 <p>The trade-off is that auth errors are less structured. Parse stderr for authentication failures and surface a helpful message:</p>
 
-<pre><code>proc.stderr.on("data", (chunk) =&gt; {
-  const text = chunk.toString();
-  if (text.includes("not logged in") || text.includes("401")) {
-    // Surface to the user: "Run `claude login` to authenticate"
+<pre><code>proc.stderr.<span class="fn">on</span>(<span class="st">"data"</span>, (chunk) =&gt; {
+  <span class="kw">const</span> text = chunk.<span class="fn">toString</span>();
+  <span class="kw">if</span> (text.<span class="fn">includes</span>(<span class="st">"not logged in"</span>) || text.<span class="fn">includes</span>(<span class="st">"401"</span>)) {
+    <span class="cm">// Surface to the user: "Run `claude login` to authenticate"</span>
   }
 });</code></pre>
 
 <h2>Practical lessons</h2>
 
-<p>After running this in production, a few things we learned:</p>
+<p>After running this in production, a few things I learned:</p>
 
 <ul>
-<li><strong>Set a subprocess timeout.</strong> We use 5 minutes. Claude Code can get into deep reasoning loops, and without a timeout your application hangs indefinitely. Kill the process and surface an error.</li>
+<li><strong>Set a subprocess timeout.</strong> I use 5 minutes. Claude Code can get into deep reasoning loops, and without a timeout your application hangs indefinitely. Kill the process and surface an error.</li>
 
 <li><strong>Token usage comes back as zeros.</strong> The CLI doesn't expose token counts in its streaming protocol. If you need usage tracking for cost estimation, you'll need to count tokens yourself or accept that Claude Code usage is unmetered from your application's perspective.</li>
 
@@ -398,5 +290,10 @@ delete filteredEnv.CLAUDECODE;</code></pre>
 
 <p>This pattern generalizes beyond code review. Any application that wants to leverage Claude Code's agentic capabilities (file exploration, codebase understanding, multi-step reasoning) while maintaining a clean multi-provider architecture can adopt this approach. The subprocess boundary gives you sandboxing and isolation for free; the streaming JSON protocol gives you programmatic control.</p>
 
+<footer class="article-footer">
+  <a href="https://github.com/Jayphen/research">Source on GitHub</a>
+</footer>
+
+</div>
 </body>
 </html>
