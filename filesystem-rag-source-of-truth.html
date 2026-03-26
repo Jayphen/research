@@ -327,7 +327,7 @@ a:hover { color: var(--accent-hover); }
 </header>
 
 <p class="lede">
-  Most RAG architectures treat the vector database as the knowledge base. We did the opposite: plain markdown files are the source of truth, and the vector index is a disposable cache that can be rebuilt at any time. Here's why, and how it plays out in practice.
+  Most RAG architectures treat the vector database as the knowledge base. I did the opposite: plain markdown files are the source of truth, and the vector index is a disposable cache that can be rebuilt at any time. Here's why, and how it plays out in practice.
 </p>
 
 <h2>The standard RAG write path is a trap</h2>
@@ -341,7 +341,7 @@ a:hover { color: var(--accent-hover); }
 </p>
 
 <p>
-  In <a href="https://github.com/Jayphen/homeclaw">homeclaw</a> (an open-source AI household assistant), we inverted this. The write path is a plain file append. The vector index is derived.
+  In <a href="https://github.com/Jayphen/homeclaw">homeclaw</a> (an open-source AI household assistant), I inverted this. The write path is a plain file append. The vector index is derived.
 </p>
 
 <h2>Filesystem writes, vector reads</h2>
@@ -420,7 +420,7 @@ a:hover { color: var(--accent-hover); }
         <span class="kw">self</span>._watcher = <span class="kw">self</span>._mem.watch()  <span class="cm"># watch for file changes</span></code></pre><span class="code-label">homeclaw/memory/semantic.py</span>
 
 <p>
-  Because the files are the source of truth, the vector index is freely rebuildable. This matters when you change embedding providers. If you switch from a local model to OpenAI embeddings (or vice versa), the vector dimensions won't match. Rather than maintaining a migration system, we just drop and rebuild:
+  Because the files are the source of truth, the vector index is freely rebuildable. This matters when you change embedding providers. If you switch from a local model to OpenAI embeddings (or vice versa), the vector dimensions won't match. Rather than maintaining a migration system, I just drop and rebuild:
 </p>
 
 <pre><code><span class="kw">try</span>:
@@ -440,7 +440,7 @@ a:hover { color: var(--accent-hover); }
 <h2>Privacy through path prefixes</h2>
 
 <p>
-  In a multi-user household, Alice shouldn't see Bob's private memories during semantic search. The conventional approach would be metadata filters or separate collections per user. We use filesystem paths instead.
+  In a multi-user household, Alice shouldn't see Bob's private memories during semantic search. The conventional approach would be metadata filters or separate collections per user. I use filesystem paths instead.
 </p>
 
 <p>
@@ -511,7 +511,7 @@ a:hover { color: var(--accent-hover); }
 <h2>Two-layer context: deterministic + semantic</h2>
 
 <p>
-  Semantic search alone isn't reliable enough for critical information. If Alice has a medication reminder due today, that can't depend on whether the embedding model ranks it highly enough against her query. So homeclaw uses a two-layer context system with explicit priority ordering:
+  Semantic search alone isn't reliable enough for critical information. If Alice has a medication reminder due today, that can't depend on whether the embedding model ranks it highly enough against her query. So I built a two-layer context system with explicit priority ordering:
 </p>
 
 <table class="priority-table">
@@ -596,14 +596,14 @@ a:hover { color: var(--accent-hover); }
 
 <hr>
 
-<h2>What we gave up</h2>
+<h2>What I gave up</h2>
 
 <p>
   This isn't free. Some tradeoffs are worth naming:
 </p>
 
 <ul>
-  <li><strong>No cross-document chunking control.</strong> memsearch decides how to chunk the markdown files. We can't tune chunk boundaries across documents the way you can with a custom ingestion pipeline.</li>
+  <li><strong>No cross-document chunking control.</strong> memsearch decides how to chunk the markdown files. I can't tune chunk boundaries across documents the way you can with a custom ingestion pipeline.</li>
   <li><strong>Over-fetching for privacy.</strong> The 3x over-fetch works for a household (2&ndash;6 people). For a multi-tenant SaaS with thousands of users, the ratio would need to be much higher, or you'd need metadata filtering in the vector query itself.</li>
   <li><strong>No structured metadata queries.</strong> You can't ask "show me all memories tagged as medical." The files are plain text. If you need faceted search, you need a separate index.</li>
   <li><strong>Filesystem-scale limits.</strong> This works for household-scale data (hundreds to low thousands of files). At enterprise scale, you'd want a proper document store with the vector index as a read-through cache.</li>
