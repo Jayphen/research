@@ -1,5 +1,12 @@
 [
   {
+    "slug": "claude-code-subprocess-provider",
+    "title": "Using Claude Code as a Subprocess Provider for Automated Code Review",
+    "description": "Spawning Claude Code CLI as a child process in Node.js, treating it as an interchangeable provider alongside OpenAI and Anthropic APIs. Covers binary discovery, the streaming JSON protocol, tool handling asymmetry, and sandboxing.",
+    "tags": ["Claude Code", "architecture", "code review"],
+    "date": "March 2026"
+  },
+  {
     "slug": "filesystem-rag-source-of-truth",
     "title": "Why Your RAG's Source of Truth Shouldn't Be a Vector Database",
     "description": "Markdown files as source of truth, vector index as disposable cache. A case study from homeclaw on filesystem-first RAG with privacy-by-path, two-layer context, and graceful degradation.",

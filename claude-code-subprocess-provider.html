@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Using Claude Code as a Subprocess Provider for Automated Code Review</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #1a1a1a;
+    --muted: #666;
+    --border: #e0e0e0;
+    --code-bg: #f0f0f0;
+    --accent: #2563eb;
+    --block-bg: #f5f5f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111;
+      --fg: #e0e0e0;
+      --muted: #999;
+      --border: #333;
+      --code-bg: #1a1a1a;
+      --accent: #60a5fa;
+      --block-bg: #181818;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.7;
+    padding: 3rem 1.5rem;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 0.75rem;
+    letter-spacing: -0.01em;
+  }
+  p {
+    margin-bottom: 1rem;
+    color: var(--fg);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.2rem 1.4rem;
+    overflow-x: auto;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+  .callout {
+    background: var(--block-bg);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.92rem;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  ul, ol {
+    margin: 0.5rem 0 1.5rem 1.5rem;
+  }
+  li {
+    margin-bottom: 0.4rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.88rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+  }
+  .back {
+    display: inline-block;
+    margin-bottom: 2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .back:hover { color: var(--fg); }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2.5rem 0;
+  }
+</style>
+</head>
+<body>
+
+<a href="/" class="back">&larr; Back</a>
+
+<h1>Using Claude Code as a Subprocess Provider for Automated Code Review</h1>
+<div class="meta">March 2026 &middot; Architecture pattern for multi-provider AI tooling</div>
+
+<p>When building an AI-powered code review tool, you typically integrate with LLM APIs: OpenAI, Anthropic, OpenRouter. But Claude Code presents an interesting option &mdash; a fully agentic coding assistant that can read files, search codebases, and reason about code, all packaged as a CLI tool. The question is: how do you treat a CLI subprocess as just another provider in a unified API abstraction?</p>
+
+<p>This post documents the pattern we arrived at for spawning Claude Code as a child process in a Node.js application, making it interchangeable with HTTP-based API providers behind a single <code>complete()</code> interface.</p>
+
+<h2>The provider abstraction</h2>
+
+<p>The core idea is a single function signature that all providers implement:</p>
+
+<pre><code>interface CompletionRequest {
+  config: ProviderConfig;
+  system: string;
+  messages: Message[];
+  tools?: ToolDefinition[];
+  maxTokens: number;
+}
+
+interface CompletionResponse {
+  text: string;
+  toolCalls: ToolCall[];
+  usage: { input: number; output: number };
+}
+
+async function complete(req: CompletionRequest): Promise&lt;CompletionResponse&gt;</code></pre>
+
+<p>For OpenAI and Anthropic, <code>complete()</code> makes an HTTP request to their respective APIs. For Claude Code, it spawns a subprocess. The caller doesn't know or care which path is taken.</p>
+
+<h2>Finding the binary</h2>
+
+<p>The first challenge is locating the <code>claude</code> binary. This is straightforward in a terminal &mdash; it's on PATH. But GUI applications on macOS (Electron, Tauri, etc.) don't inherit the user's shell PATH. They launch from the Finder/Dock with a minimal environment, so <code>which claude</code> finds nothing.</p>
+
+<p>The solution is to check well-known install locations in priority order:</p>
+
+<pre><code>function findClaude(): string {
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, ".local/bin/claude"),
+    path.join(home, ".claude/local/claude"),
+    path.join(home, ".npm-global/bin/claude"),
+    "/usr/local/bin/claude",
+    "/opt/homebrew/bin/claude",
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  // Fallback: assume it's on PATH (works in terminal contexts)
+  return "claude";
+}</code></pre>
+
+<p>This same pattern applies to finding <code>node</code> itself if your GUI app needs to spawn Node processes &mdash; check Volta, nvm, fnm, and Homebrew install paths before falling back to PATH resolution.</p>
+
+<h2>The streaming JSON protocol</h2>
+
+<p>Claude Code supports a machine-readable streaming mode via two flags:</p>
+
+<pre><code>--output-format stream-json
+--input-format stream-json</code></pre>
+
+<p>In this mode, you write JSON messages to stdin and read line-delimited JSON events from stdout. There are three event types that matter:</p>
+
+<table>
+  <tr><th>Event type</th><th>Purpose</th></tr>
+  <tr><td><code>assistant</code></td><td>Text content from the model, delivered incrementally</td></tr>
+  <tr><td><code>control_request</code></td><td>Permission prompts (file access, tool use)</td></tr>
+  <tr><td><code>result</code></td><td>Final aggregated response text</td></tr>
+</table>
+
+<p>Here's the core of the subprocess interaction:</p>
+
+<pre><code>const claudeBin = findClaude();
+
+const args = [
+  "--output-format", "stream-json",
+  "--input-format", "stream-json",
+  "--permission-prompt-tool", "stdio",
+  "--permission-mode", "dontAsk",
+  "--allowedTools", "Read,Grep,Glob",
+  "--verbose",
+  "--append-system-prompt", systemPrompt,
+];
+
+const proc = spawn(claudeBin, args, {
+  env: filteredEnv,
+  stdio: ["pipe", "pipe", "pipe"],
+});
+
+// Send the user prompt
+const userMessage = JSON.stringify({
+  type: "user",
+  message: { role: "user", content: userPrompt },
+});
+proc.stdin.write(userMessage + "\n");
+proc.stdin.end();</code></pre>
+
+<p>Then read events from stdout:</p>
+
+<pre><code>let resultText = "";
+let lastAssistantText = "";
+
+for await (const line of readLines(proc.stdout)) {
+  const event = JSON.parse(line);
+
+  switch (event.type) {
+    case "assistant": {
+      // Collect text blocks
+      for (const block of event.message?.content ?? []) {
+        if (block.type === "text") {
+          lastAssistantText += block.text;
+        }
+      }
+      break;
+    }
+
+    case "control_request": {
+      // Auto-approve permission requests
+      const response = JSON.stringify({
+        type: "control_response",
+        response: {
+          subtype: "success",
+          request_id: event.request_id,
+          response: { behavior: "allow", updatedInput: {} },
+        },
+      });
+      proc.stdin.write(response + "\n");
+      break;
+    }
+
+    case "result": {
+      resultText = event.result;
+      break;
+    }
+  }
+}</code></pre>
+
+<div class="callout">
+<p><strong>Note on stdin lifecycle:</strong> After writing the user prompt, call <code>proc.stdin.end()</code> to signal that input is complete. However, if you need to handle <code>control_request</code> events (permission prompts), keep stdin open and only close it after receiving the <code>result</code> event. The implementation above simplifies this &mdash; in practice, you may need to defer <code>stdin.end()</code>.</p>
+</div>
+
+<h2>The tool handling asymmetry</h2>
+
+<p>This is the most important architectural insight. When using API providers (OpenAI, Anthropic), your application manages the tool-calling loop explicitly: the model requests a tool call, you execute it locally, send the result back, and repeat until the model produces a final text response.</p>
+
+<p>Claude Code handles all of this internally. When you pass <code>--allowedTools Read,Grep,Glob</code>, Claude Code reads files, searches the codebase, and reasons about the results on its own. From your application's perspective, you send a prompt and get back text.</p>
+
+<p>This means your analysis pipeline needs to branch:</p>
+
+<pre><code>async function analyzeCode(
+  config: ProviderConfig,
+  systemPrompt: string,
+  messages: Message[],
+): Promise&lt;string&gt; {
+  if (config.provider === "claudecode") {
+    // Single call. Claude Code handles tools internally.
+    const response = await complete({
+      config,
+      system: systemPrompt,
+      messages,
+      maxTokens: 16384,
+    });
+    return response.text;
+  }
+
+  // API providers: explicit multi-turn tool loop
+  const history = [...messages];
+  for (let turn = 0; turn &lt; 10; turn++) {
+    const response = await complete({
+      config,
+      system: systemPrompt,
+      messages: history,
+      tools: TOOL_DEFINITIONS,
+      maxTokens: 16384,
+    });
+
+    if (response.toolCalls.length === 0) {
+      return response.text;
+    }
+
+    // Execute tool calls and add results to history
+    for (const call of response.toolCalls) {
+      const result = await executeTool(call);
+      history.push({ role: "tool", toolCallId: call.id, content: result });
+    }
+  }
+
+  return history[history.length - 1].content;
+}</code></pre>
+
+<p>The key detail: when calling Claude Code, you omit the <code>tools</code> parameter entirely. It has its own tools and will use them as it sees fit, constrained by <code>--allowedTools</code>.</p>
+
+<h2>Sandboxing</h2>
+
+<p>For a code review use case, Claude Code should be able to read and search the codebase but never modify it. The <code>--allowedTools</code> flag provides this boundary:</p>
+
+<pre><code>--allowedTools Read,Grep,Glob</code></pre>
+
+<p>This restricts the session to file reading, regex search, and glob matching. Write operations, shell commands, and other tools are unavailable. Combined with <code>--permission-mode dontAsk</code>, this creates a fully non-interactive, read-only session.</p>
+
+<h2>Environment filtering</h2>
+
+<p>A subtle issue arises when your application is itself running inside Claude Code (e.g., during development). Claude Code sets a <code>CLAUDECODE</code> environment variable, and child Claude Code processes detect this to prevent infinite recursion.</p>
+
+<p>The fix is to strip this variable before spawning:</p>
+
+<pre><code>const filteredEnv = { ...process.env };
+delete filteredEnv.CLAUDECODE;</code></pre>
+
+<p>Without this, the subprocess will detect it's "nested" and may refuse to start or behave differently.</p>
+
+<h2>Authentication model</h2>
+
+<p>One practical advantage of the Claude Code provider: no API key management. Claude Code uses its own authentication (<code>claude login</code>), which persists in <code>~/.claude/.credentials.json</code> or the macOS Keychain. From your application's perspective, the provider just works if the user has Claude Code installed and logged in.</p>
+
+<p>This makes it the zero-configuration option. For API providers, you need to collect and securely store keys. For Claude Code, you inherit the user's existing session.</p>
+
+<p>The trade-off is that auth errors are less structured. Parse stderr for authentication failures and surface a helpful message:</p>
+
+<pre><code>proc.stderr.on("data", (chunk) =&gt; {
+  const text = chunk.toString();
+  if (text.includes("not logged in") || text.includes("401")) {
+    // Surface to the user: "Run `claude login` to authenticate"
+  }
+});</code></pre>
+
+<h2>Practical lessons</h2>
+
+<p>After running this in production, a few things we learned:</p>
+
+<ul>
+<li><strong>Set a subprocess timeout.</strong> We use 5 minutes. Claude Code can get into deep reasoning loops, and without a timeout your application hangs indefinitely. Kill the process and surface an error.</li>
+
+<li><strong>Token usage comes back as zeros.</strong> The CLI doesn't expose token counts in its streaming protocol. If you need usage tracking for cost estimation, you'll need to count tokens yourself or accept that Claude Code usage is unmetered from your application's perspective.</li>
+
+<li><strong><code>--permission-mode dontAsk</code> is essential.</strong> Without it, Claude Code will pause and wait for interactive permission approval on stdin &mdash; which will hang your subprocess forever in a non-interactive context.</li>
+
+<li><strong>Tool call results are empty.</strong> Since Claude Code executes tools internally, the <code>toolCalls</code> array in your <code>CompletionResponse</code> is always empty. This is by design, but make sure your downstream code handles it.</li>
+
+<li><strong>Model override is available.</strong> Pass <code>--model claude-opus-4-6</code> (or any supported model) to override Claude Code's default. This lets users configure the model in your application's settings and have it flow through to the subprocess.</li>
+</ul>
+
+<hr>
+
+<h2>The resulting architecture</h2>
+
+<p>The final shape is a provider adapter that looks like this:</p>
+
+<table>
+  <tr><th>Concern</th><th>API Providers</th><th>Claude Code</th></tr>
+  <tr><td>Transport</td><td>HTTP</td><td>Subprocess (stdin/stdout)</td></tr>
+  <tr><td>Auth</td><td>API keys in env vars</td><td><code>claude login</code> session</td></tr>
+  <tr><td>Tool handling</td><td>Application-managed loop</td><td>Internal to subprocess</td></tr>
+  <tr><td>Format</td><td>SDK-specific (OpenAI, Anthropic)</td><td>Line-delimited JSON</td></tr>
+  <tr><td>Sandboxing</td><td>Tool definitions you provide</td><td><code>--allowedTools</code> flag</td></tr>
+  <tr><td>Token tracking</td><td>Full usage stats</td><td>Not available</td></tr>
+</table>
+
+<p>The provider abstraction hides all of this. Callers work with a single <code>complete()</code> function and never think about whether the response came from an HTTP API or a local subprocess.</p>
+
+<p>This pattern generalizes beyond code review. Any application that wants to leverage Claude Code's agentic capabilities (file exploration, codebase understanding, multi-step reasoning) while maintaining a clean multi-provider architecture can adopt this approach. The subprocess boundary gives you sandboxing and isolation for free; the streaming JSON protocol gives you programmatic control.</p>
+
+</body>
+</html>
