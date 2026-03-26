@@ -1,5 +1,12 @@
 [
   {
+    "slug": "flutter-firebase-ffmpeg-crash",
+    "title": "The FFmpeg Ghost: How a Bundled Native Library Broke Every Flutter Plugin",
+    "description": "A transitive FFmpegKit dependency crashed during Android plugin registration, silently killing Firebase and every other platform channel. Tracing the root cause from misleading error messages to a JNI_OnLoad failure.",
+    "tags": ["Flutter", "Firebase", "debugging", "Android"],
+    "date": "March 2026"
+  },
+  {
     "slug": "claude-code-subprocess-provider",
     "title": "Using Claude Code as a Subprocess Provider for Automated Code Review",
     "description": "Spawning Claude Code CLI as a child process in Node.js, treating it as an interchangeable provider alongside OpenAI and Anthropic APIs. Covers binary discovery, the streaming JSON protocol, tool handling asymmetry, and sandboxing.",

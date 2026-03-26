@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The FFmpeg Ghost: How a Bundled Native Library Broke Every Flutter Plugin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="article.css">
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="/">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  Back to research
+</a>
+
+<header class="article-header">
+  <h1>The FFmpeg Ghost: How a Bundled Native Library Broke Every Flutter Plugin</h1>
+  <div class="article-meta">
+    <span class="tag">Flutter</span>
+    <span class="tag">Firebase</span>
+    <span class="tag">debugging</span>
+    <span class="tag">Android</span>
+    <span>March 2026</span>
+  </div>
+</header>
+
+<p class="lede">A transitive native dependency crashed silently during Android plugin registration, taking down Firebase, path_provider, and every other platform channel with it. The error message pointed everywhere except the actual cause. Here's how I traced it.</p>
+
+<h2>The symptom</h2>
+
+<p>My Flutter voice-notes app, Loose Tongues, worked perfectly in local debug and release builds. But every deployed APK from CI failed with:</p>
+
+<pre><code><span class="st">PlatformException(channel-error, Unable to establish connection on channel:
+"dev.flutter.pigeon.firebase_core_platform_interface.FirebaseCoreHostApi.initializeCore")</span></code></pre>
+
+<p>Firebase wouldn't initialize. The app showed a blank screen. No auth, no Firestore, nothing.</p>
+
+<h2>The misleading trail</h2>
+
+<p>The error message says "Firebase init failed," so naturally I spent hours investigating Firebase:</p>
+
+<ul>
+  <li><strong>Signing keys.</strong> CI used an ephemeral debug keystore with an unregistered SHA-1 fingerprint. I set up proper release signing with the local debug keystore. Firebase native SDK started logging <code>FirebaseApp initialization successful</code>. But the Dart-side error persisted.</li>
+  <li><strong>Flutter version mismatch.</strong> Local was 3.38.2, CI was 3.41.5. I pinned, then upgraded. The error reproduced on both versions.</li>
+  <li><strong>google-services.json.</strong> Checked the config. Fine.</li>
+  <li><strong>Plugin versions.</strong> Upgraded all Firebase packages to latest. Same error.</li>
+</ul>
+
+<p>Then I noticed something: <code>path_provider</code> was also failing with the exact same "Unable to establish connection on channel" error. And <code>google_fonts</code>. Every Pigeon-based plugin was dead.</p>
+
+<div class="callout">
+  <div class="callout-title">Key insight</div>
+  When multiple unrelated platform channels all fail simultaneously, the problem isn't in any individual plugin. Something is preventing plugin registration entirely.
+</div>
+
+<h2>The breakthrough: fresh project comparison</h2>
+
+<p>I created a fresh Flutter 3.41.5 project, added <code>firebase_core</code> with the same <code>google-services.json</code> and package name, built a release APK, and installed it on the same emulator.</p>
+
+<p>It worked.</p>
+
+<p>Same Flutter version, same Firebase config, same emulator, same signing key. The only difference was the other dependencies. The bug was in the app's dependency tree, not Flutter or Firebase.</p>
+
+<h2>Reading the right logs</h2>
+
+<p>I'd been filtering <code>adb logcat</code> for Flutter-level messages. The real error was in the Android native logs, which I'd been ignoring:</p>
+
+<pre><code><span class="cm">E/GeneratedPluginsRegister:</span> <span class="st">Tried to automatically register plugins with
+  FlutterEngine but could not find or invoke the GeneratedPluginRegistrant.</span>
+<span class="cm">E/GeneratedPluginsRegister:</span> <span class="st">java.lang.reflect.InvocationTargetException</span>
+  ...
+<span class="cm">Caused by:</span> <span class="st">java.lang.Error: FFmpegKit failed to start</span>
+<span class="cm">Caused by:</span> <span class="st">java.lang.UnsatisfiedLinkError: Bad JNI version returned
+  from JNI_OnLoad in "libffmpegkit_abidetect.so": 0</span></code></pre>
+
+<p>FFmpegKit's native library was crashing during <code>JNI_OnLoad</code>. And because Flutter's <code>GeneratedPluginRegistrant</code> registers all plugins in a single method call, one crash aborts the entire registration. Every plugin after FFmpegKit in alphabetical order never gets registered &mdash; including Firebase, which comes after FFmpeg.</p>
+
+<h2>The dependency chain</h2>
+
+<p>I wasn't using FFmpegKit directly. The dependency chain was:</p>
+
+<pre><code><span class="fn">loose_tongues</span>
+  <span class="op">└──</span> <span class="fn">whisper_ggml</span> <span class="nu">^1.7.0</span>        <span class="cm"># on-device Whisper transcription</span>
+        <span class="op">└──</span> <span class="fn">ffmpeg_kit_flutter_new_min</span> <span class="nu">^2.1.0</span>  <span class="cm"># audio format conversion</span>
+              <span class="op">└──</span> <span class="st">libffmpegkit_abidetect.so</span>  <span class="cm"># 💥 crashes on load</span></code></pre>
+
+<p><code>whisper_ggml</code> uses FFmpegKit to convert audio formats (e.g., m4a to WAV) before passing them to Whisper. The native FFmpegKit library worked on older Flutter/Kotlin/Gradle combinations but broke with Flutter 3.41's Kotlin 2.2.20 and newer Android build tooling.</p>
+
+<h2>Why it only failed in deployed builds</h2>
+
+<p>This is the cruelest part. The bug didn't manifest in local builds for months because:</p>
+
+<ol>
+  <li>Local development used Flutter 3.38.2, which shipped with an older Kotlin version where the JNI interface was compatible</li>
+  <li>CI used <code>channel: 'stable'</code>, which pulled Flutter 3.41.5 with Kotlin 2.2.20</li>
+  <li>The newer Kotlin/Gradle toolchain changed the native linking behavior, causing <code>JNI_OnLoad</code> to return an incompatible version</li>
+</ol>
+
+<p>When I upgraded local Flutter to 3.41.5, the bug reproduced immediately &mdash; on the emulator, in both debug and release mode. The "CI vs local" distinction was a red herring; it was purely a Flutter version issue.</p>
+
+<h2>The fix</h2>
+
+<p>The <code>whisper_ggml</code> package has a fork called <a href="https://pub.dev/packages/whisper_ggml_plus">whisper_ggml_plus</a> that decoupled FFmpegKit in v1.3.0. The swap was straightforward:</p>
+
+<pre><code><span class="cm"># pubspec.yaml</span>
+<span class="kw">dependencies:</span>
+<span class="st">-  whisper_ggml: ^1.7.0</span>
+<span class="fn">+  whisper_ggml_plus: ^1.3.0</span></code></pre>
+
+<p>Three additional changes were needed:</p>
+
+<ol>
+  <li><strong>Record audio as WAV.</strong> Without FFmpegKit to convert m4a, I switched the recorder from <code>AudioEncoder.aacLc</code> to <code>AudioEncoder.wav</code>. Whisper expects 16kHz mono PCM anyway.</li>
+  <li><strong>Simplify voice activity detection.</strong> The VAD used <code>FFmpegKit.execute('-af volumedetect')</code>. I replaced it with a file-size heuristic &mdash; crude but zero dependencies.</li>
+  <li><strong>Handle new model enum.</strong> <code>whisper_ggml_plus</code> adds <code>WhisperModel.largeV3Turbo</code> which needed to be added to switch expressions.</li>
+</ol>
+
+<p>APK size dropped from 123MB to 66MB. Firebase initialized on the first launch.</p>
+
+<h2>Lessons</h2>
+
+<h3>1. One native crash kills all plugins</h3>
+
+<p>Flutter's <code>GeneratedPluginRegistrant.registerWith()</code> is a single method that registers every plugin sequentially. If any plugin throws during registration, none of the subsequent plugins get registered. There's no isolation, no try/catch per plugin (despite what the generated code looks like &mdash; the catch blocks only handle class-not-found, not native load failures).</p>
+
+<h3>2. Filter for native logs, not just Flutter logs</h3>
+
+<p>The Flutter-level error (<code>PlatformException: channel-error</code>) is a downstream symptom. The root cause only appears in Android's native logcat. When debugging platform channel failures, always check:</p>
+
+<pre><code><span class="fn">adb logcat</span> | <span class="fn">grep</span> <span class="st">"GeneratedPlugin\|UnsatisfiedLink\|JNI\|Caused by"</span></code></pre>
+
+<h3>3. Transitive native dependencies are invisible risks</h3>
+
+<p>My <code>pubspec.yaml</code> didn't mention FFmpegKit. It came in through <code>whisper_ggml</code>, which used it for audio conversion. The 60MB of native <code>.so</code> files were silently bundled into every APK. Audit your transitive dependencies, especially those with native code.</p>
+
+<h3>4. Test deployed builds, not just local</h3>
+
+<p>The bug hid for months because local and CI used different Flutter versions. Pinning your CI Flutter version to match local (or vice versa) would have surfaced this immediately. Better yet: test the actual APK that CI produces, not a local build with a different toolchain.</p>
+
+<h3>5. Surface real errors early</h3>
+
+<p>The original code silently caught Firebase init failures and continued, leading to a confusing "No Firebase App [DEFAULT] has been created" error deep in the auth flow. Adding an error screen that displayed the actual <code>PlatformException</code> message cut the debugging loop from "deploy and check" to "read the screen."</p>
+
+<footer class="article-footer">
+  <a href="https://github.com/Jayphen/research">Source on GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>
