@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why Your RAG's Source of Truth Shouldn't Be a Vector Database</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #FAF7F2;
+  --bg-warm: #F5F0E8;
+  --bg-code: #1E1E2E;
+  --text: #2C2A28;
+  --text-secondary: #6B6560;
+  --text-muted: #9E9790;
+  --border: #E5DFD6;
+  --surface: #FFFFFF;
+  --accent: #2A7B9B;
+  --accent-hover: #1F6A87;
+  --accent-light: #E4F2F7;
+  --code-text: #CDD6F4;
+  --code-comment: #6C7086;
+  --code-keyword: #CBA6F7;
+  --code-string: #A6E3A1;
+  --code-function: #89B4FA;
+  --code-number: #FAB387;
+  --code-type: #F9E2AF;
+  --code-operator: #89DCEB;
+
+  --font-display: 'Bricolage Grotesque', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 80px 24px 120px;
+}
+
+/* Back link */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 14px;
+  margin-bottom: 48px;
+  transition: color 0.15s;
+}
+.back:hover { color: var(--accent); }
+.back svg { width: 16px; height: 16px; }
+
+/* Header */
+.article-header {
+  margin-bottom: 56px;
+}
+
+.article-header h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.article-meta {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.article-meta .tag {
+  font-size: 12px;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.lede {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 48px;
+  padding-bottom: 48px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Prose */
+h2 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 56px;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-top: 40px;
+  margin-bottom: 12px;
+}
+
+p {
+  margin-bottom: 20px;
+}
+
+/* Inline code */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--bg-warm);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+/* Code blocks */
+pre {
+  background: var(--bg-code);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 24px 0 28px;
+  overflow-x: auto;
+  line-height: 1.55;
+  position: relative;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  border-radius: 0;
+}
+
+.code-label {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--code-comment);
+  user-select: none;
+}
+
+/* Syntax highlighting classes */
+.kw { color: var(--code-keyword); }
+.fn { color: var(--code-function); }
+.st { color: var(--code-string); }
+.cm { color: var(--code-comment); }
+.nu { color: var(--code-number); }
+.ty { color: var(--code-type); }
+.op { color: var(--code-operator); }
+
+/* Callout boxes */
+.callout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 28px 0;
+}
+
+.callout-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+
+.callout p:last-child { margin-bottom: 0; }
+
+/* Diagram */
+.diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  margin: 32px 0;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.diagram pre {
+  background: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  display: inline-block;
+}
+
+.diagram pre code {
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+/* Lists */
+ul, ol {
+  margin-bottom: 20px;
+  padding-left: 24px;
+}
+
+li {
+  margin-bottom: 8px;
+}
+
+li code {
+  font-size: 0.82em;
+}
+
+/* Strong */
+strong {
+  font-weight: 600;
+}
+
+/* Horizontal rule */
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 48px 0;
+}
+
+/* Footer */
+.article-footer {
+  margin-top: 64px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.article-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.article-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Links in prose */
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }
+
+/* Priority table */
+.priority-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0 28px;
+  font-size: 0.9rem;
+}
+
+.priority-table th,
+.priority-table td {
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.priority-table th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-warm);
+}
+
+.priority-table tr:last-child td {
+  border-bottom: none;
+}
+
+.priority-table code {
+  font-size: 0.8em;
+}
+
+@media (max-width: 600px) {
+  .container { padding: 48px 16px 80px; }
+  pre { padding: 16px; margin-left: -16px; margin-right: -16px; border-radius: 0; }
+  .diagram { padding: 16px; margin-left: -16px; margin-right: -16px; border-radius: 0; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="/">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  Back to research
+</a>
+
+<header class="article-header">
+  <h1>Why Your RAG's Source of Truth Shouldn't Be a Vector Database</h1>
+  <div class="article-meta">
+    <span class="tag">RAG</span>
+    <span class="tag">architecture</span>
+    <span class="tag">homeclaw</span>
+    <span>March 2026</span>
+  </div>
+</header>
+
+<p class="lede">
+  Most RAG architectures treat the vector database as the knowledge base. We did the opposite: plain markdown files are the source of truth, and the vector index is a disposable cache that can be rebuilt at any time. Here's why, and how it plays out in practice.
+</p>
+
+<h2>The standard RAG write path is a trap</h2>
+
+<p>
+  The typical RAG setup looks like this: content goes into a chunking pipeline, gets embedded, and lands in a vector store. The vector store <em>is</em> the knowledge base. If you want to inspect what the system "knows," you query the vector DB. If you want to edit knowledge, you re-embed and upsert.
+</p>
+
+<p>
+  This works until it doesn't. Switching embedding models means re-embedding everything. Debugging bad retrieval means reverse-engineering what chunks exist and how they were split. Migrating between vector databases means exporting opaque binary blobs. The vector store becomes a roach motel: data goes in, but getting it out in a useful form is painful.
+</p>
+
+<p>
+  In <a href="https://github.com/Jayphen/homeclaw">homeclaw</a> (an open-source AI household assistant), we inverted this. The write path is a plain file append. The vector index is derived.
+</p>
+
+<h2>Filesystem writes, vector reads</h2>
+
+<p>
+  When the agent saves a memory, it appends a timestamped line to a markdown file. That's it. No embeddings, no async pipeline, no failure modes beyond disk I/O.
+</p>
+
+<p>
+  The files live at predictable paths:
+</p>
+
+<pre><code>workspaces/
+  household/
+    memory/
+      routines.md        <span class="cm"># shared household knowledge</span>
+      food.md
+    channels/
+      group-family/
+        2026-03-25.md    <span class="cm"># group chat logs, auto-indexed</span>
+  alice/
+    memory/
+      health.md          <span class="cm"># alice's private knowledge</span>
+      work.md
+    notes/
+      2026-03-25.md      <span class="cm"># daily notes</span>
+  bob/
+    memory/
+      hobbies.md</code></pre>
+
+<p>
+  Each memory file is append-only with timestamps:
+</p>
+
+<pre><code><span class="cm"># Food</span>
+
+- [2026-03-10 08:15] Alice is vegetarian, Bob eats everything
+- [2026-03-12 19:30] The family likes Thai food on Fridays
+- [2026-03-25 12:00] Bob is trying a low-carb diet this month</code></pre>
+
+<p>
+  <a href="https://github.com/zilliztech/memsearch">memsearch</a> (a lightweight wrapper around Milvus Lite) watches the filesystem and indexes changes automatically. The agent writes files; memsearch notices and embeds them in the background. The two systems never talk to each other directly.
+</p>
+
+<div class="diagram">
+<pre><code>Agent writes        Filesystem          memsearch watches
+  memory_save ──&gt; append to .md ──&gt; watch() detects change
+                       │                     │
+                       │              embed &amp; index
+                       │                     │
+                       ▼                     ▼
+                  Source of truth      Derived index
+                  (inspectable,       (disposable,
+                   git-trackable)      rebuildable)</code></pre>
+</div>
+
+<h2>How initialization works</h2>
+
+<p>
+  On startup, <code>SemanticMemory</code> collects every workspace subdirectory and hands them to memsearch for indexing. Then it starts a file watcher so new content becomes searchable without a restart.
+</p>
+
+<pre><code><span class="kw">class</span> <span class="ty">SemanticMemory</span>:
+    <span class="kw">async def</span> <span class="fn">initialize</span>(<span class="kw">self</span>) -&gt; <span class="ty">None</span>:
+        <span class="kw">from</span> memsearch <span class="kw">import</span> <span class="ty">MemSearch</span>
+
+        paths = <span class="kw">self</span>._collect_paths()  <span class="cm"># every workspace subdir</span>
+
+        <span class="kw">self</span>._mem = <span class="ty">MemSearch</span>(
+            paths=paths,
+            milvus_uri=<span class="st">f"</span>{<span class="kw">self</span>._workspaces_path}<span class="st">/semantic_index.db"</span>,
+            embedding_provider=<span class="kw">self</span>._embedding_provider,
+        )
+
+        n = <span class="kw">await</span> <span class="kw">self</span>._mem.index()         <span class="cm"># build initial index</span>
+        <span class="kw">self</span>._watcher = <span class="kw">self</span>._mem.watch()  <span class="cm"># watch for file changes</span></code></pre><span class="code-label">homeclaw/memory/semantic.py</span>
+
+<p>
+  Because the files are the source of truth, the vector index is freely rebuildable. This matters when you change embedding providers. If you switch from a local model to OpenAI embeddings (or vice versa), the vector dimensions won't match. Rather than maintaining a migration system, we just drop and rebuild:
+</p>
+
+<pre><code><span class="kw">try</span>:
+    <span class="kw">self</span>._mem = <span class="ty">MemSearch</span>(**kwargs)
+<span class="kw">except</span> <span class="ty">ValueError</span> <span class="kw">as</span> ve:
+    <span class="kw">if</span> <span class="st">"dimension mismatch"</span> <span class="kw">in</span> <span class="fn">str</span>(ve).lower():
+        <span class="cm"># Embedding provider changed &mdash; nuke the index and rebuild</span>
+        client = <span class="ty">MilvusClient</span>(uri=milvus_uri)
+        client.drop_collection(<span class="st">"memsearch_chunks"</span>)
+        client.close()
+        <span class="kw">self</span>._mem = <span class="ty">MemSearch</span>(**kwargs)  <span class="cm"># re-indexes from files</span></code></pre><span class="code-label">homeclaw/memory/semantic.py</span>
+
+<p>
+  No data is lost. No migration needed. The files haven't changed; only the derived index was stale.
+</p>
+
+<h2>Privacy through path prefixes</h2>
+
+<p>
+  In a multi-user household, Alice shouldn't see Bob's private memories during semantic search. The conventional approach would be metadata filters or separate collections per user. We use filesystem paths instead.
+</p>
+
+<p>
+  The recall method fetches 3x the requested results from the vector index, then filters by checking whether each result's source file path is visible to the requesting person:
+</p>
+
+<pre><code><span class="kw">async def</span> <span class="fn">recall</span>(
+    <span class="kw">self</span>, query: <span class="ty">str</span>, top_k: <span class="ty">int</span> = <span class="nu">3</span>,
+    person: <span class="ty">str</span> | <span class="ty">None</span> = <span class="ty">None</span>,
+) -&gt; <span class="ty">list</span>[<span class="ty">dict</span>]:
+    <span class="cm"># Over-fetch to compensate for post-hoc filtering</span>
+    results = <span class="kw">await</span> <span class="kw">self</span>._mem.search(query, top_k=top_k <span class="op">*</span> <span class="nu">3</span>)
+
+    household_prefix = <span class="st">f"</span>{<span class="kw">self</span>._workspaces_path}<span class="st">/household"</span>
+    person_prefix = <span class="st">f"</span>{<span class="kw">self</span>._workspaces_path}<span class="st">/</span>{person}<span class="st">"</span>
+
+    filtered = []
+    <span class="kw">for</span> r <span class="kw">in</span> results:
+        source = r.get(<span class="st">"source"</span>, <span class="st">""</span>)
+        <span class="kw">if</span> source.startswith(household_prefix):
+            filtered.append(r)       <span class="cm"># household = always visible</span>
+        <span class="kw">elif</span> person_prefix <span class="kw">and</span> source.startswith(person_prefix):
+            filtered.append(r)       <span class="cm"># own workspace = visible</span>
+        <span class="cm"># other members' paths silently excluded</span>
+
+    <span class="kw">return</span> filtered[:top_k]</code></pre><span class="code-label">homeclaw/memory/semantic.py</span>
+
+<div class="callout">
+  <div class="callout-title">Why this works</div>
+  <p>
+    The filesystem path <em>is</em> the access control model. <code>workspaces/household/</code> is shared. <code>workspaces/alice/</code> is private to Alice. There's no separate ACL to keep in sync, no metadata tags to attach at indexing time, no risk of a tagging bug leaking private data into shared search results. The path is intrinsic to the data.
+  </p>
+  <p>
+    The 3x over-fetch means that even if two-thirds of results belong to other users, we still fill the requested <code>top_k</code>. In practice, most queries hit a mix of household and personal content, so the over-fetch is rarely needed in full.
+  </p>
+</div>
+
+<h2>Group chats become searchable knowledge</h2>
+
+<p>
+  When someone talks to homeclaw in a family group chat, the exchange is logged as a daily markdown file:
+</p>
+
+<pre><code><span class="kw">def</span> <span class="fn">_append_chat_log</span>(
+    workspaces: <span class="ty">Path</span>, channel: <span class="ty">str</span>,
+    user_text: <span class="ty">str</span>, assistant_text: <span class="ty">str</span>,
+) -&gt; <span class="ty">None</span>:
+    channel_dir = workspaces / <span class="st">"household"</span> / <span class="st">"channels"</span> / channel
+    channel_dir.mkdir(parents=<span class="ty">True</span>, exist_ok=<span class="ty">True</span>)
+
+    today = datetime.now(UTC).strftime(<span class="st">"%Y-%m-%d"</span>)
+    log_path = channel_dir / <span class="st">f"</span>{today}<span class="st">.md"</span>
+
+    timestamp = datetime.now(UTC).strftime(<span class="st">"%H:%M"</span>)
+    entry = <span class="st">f"- [</span>{timestamp}<span class="st">] </span>{user_text}<span class="st">\n- [</span>{timestamp}<span class="st">] homeclaw: </span>{assistant_text}<span class="st">\n"</span>
+
+    <span class="kw">with</span> <span class="fn">open</span>(log_path, <span class="st">"a"</span>) <span class="kw">as</span> f:
+        f.write(entry)</code></pre><span class="code-label">homeclaw/agent/loop.py</span>
+
+<p>
+  These files land under <code>workspaces/household/channels/</code>, which means memsearch indexes them automatically (it watches the whole workspace tree), and they pass the <code>household_prefix</code> check in recall, so they're visible to every household member.
+</p>
+
+<p>
+  The practical effect: Alice can DM homeclaw and say "what did we decide about dinner in the family chat?" and get a relevant answer, because the group chat is searchable household knowledge. No explicit "save to memory" step needed. The conversation <em>is</em> the knowledge, filed in a place the search layer can find it.
+</p>
+
+<h2>Two-layer context: deterministic + semantic</h2>
+
+<p>
+  Semantic search alone isn't reliable enough for critical information. If Alice has a medication reminder due today, that can't depend on whether the embedding model ranks it highly enough against her query. So homeclaw uses a two-layer context system with explicit priority ordering:
+</p>
+
+<table class="priority-table">
+  <thead>
+    <tr>
+      <th>Priority</th>
+      <th>Content</th>
+      <th>Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1 (never dropped)</td>
+      <td>Current time, person, household profile, today's reminders</td>
+      <td>Deterministic file reads</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>Recent notes, memory topics, skill catalog, routines, decisions</td>
+      <td>Deterministic file reads</td>
+    </tr>
+    <tr>
+      <td>3 (dropped first)</td>
+      <td>Semantically recalled chunks</td>
+      <td>Vector search on the user's message</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  The context builder always injects structured data first, then appends semantic recall results at the end:
+</p>
+
+<pre><code><span class="kw">async def</span> <span class="fn">build_context</span>(
+    message: <span class="ty">str</span>, person: <span class="ty">str</span>, workspaces: <span class="ty">Path</span>,
+    semantic_memory: <span class="ty">SemanticMemory</span> | <span class="ty">None</span> = <span class="ty">None</span>,
+) -&gt; <span class="ty">str</span>:
+    parts: <span class="ty">list</span>[<span class="ty">str</span>] = []
+
+    <span class="cm"># Priority 1: always present</span>
+    parts.append(<span class="st">f"You are talking to: </span>{person}<span class="st">"</span>)
+    parts.append(<span class="st">f"Current time: </span>{now}<span class="st">"</span>)
+    <span class="cm"># ... household profile, today's reminders ...</span>
+
+    <span class="cm"># Priority 2: structured personal data</span>
+    <span class="cm"># ... recent notes, memory topics, routines, decisions ...</span>
+
+    <span class="cm"># Priority 3: semantic recall (additive, dropped first)</span>
+    <span class="kw">if</span> semantic_memory <span class="kw">and</span> semantic_memory.enabled:
+        recalled = <span class="kw">await</span> semantic_memory.recall(
+            message, top_k=cfg.max_semantic_chunks, person=person,
+        )
+        <span class="kw">if</span> recalled:
+            parts.append(<span class="st">"Relevant context from memory:"</span>)
+            <span class="kw">for</span> item <span class="kw">in</span> recalled:
+                parts.append(<span class="st">f"  </span>{item[<span class="st">'text'</span>]}<span class="st">"</span>)</code></pre><span class="code-label">homeclaw/agent/context.py</span>
+
+<p>
+  The key insight: semantic search is a <strong>supplement</strong>, not the primary retrieval mechanism. It adds relevant background that structured lookups might miss. But the system works without it. The LLM still knows who it's talking to, what's on the schedule, and what reminders are due. Semantic recall adds color; it doesn't carry load.
+</p>
+
+<h2>Optional by design</h2>
+
+<p>
+  The entire semantic layer is behind a conditional import:
+</p>
+
+<pre><code><span class="kw">try</span>:
+    <span class="kw">from</span> memsearch <span class="kw">import</span> <span class="ty">MemSearch</span>
+    <span class="cm"># ... initialize, index, watch ...</span>
+    <span class="kw">self</span>._enabled = <span class="ty">True</span>
+<span class="kw">except</span> <span class="ty">ImportError</span>:
+    <span class="kw">self</span>._enabled = <span class="ty">False</span>  <span class="cm"># everything still works</span></code></pre>
+
+<p>
+  Every call to <code>recall()</code> starts with <code>if not self._enabled: return []</code>. The context builder checks <code>semantic_memory.enabled</code> before attempting recall. There's no crash path, no degraded mode flag, no "semantic memory unavailable" warning polluting the UX. The feature simply isn't there, and the system is complete without it.
+</p>
+
+<p>
+  This matters for deployment flexibility. homeclaw runs on home servers (Unraid, Raspberry Pi, NAS boxes). Not everyone wants to run an embedding model. The semantic layer adds genuine value when present, but the system can't <em>require</em> it without shrinking the set of machines it runs on.
+</p>
+
+<hr>
+
+<h2>What we gave up</h2>
+
+<p>
+  This isn't free. Some tradeoffs are worth naming:
+</p>
+
+<ul>
+  <li><strong>No cross-document chunking control.</strong> memsearch decides how to chunk the markdown files. We can't tune chunk boundaries across documents the way you can with a custom ingestion pipeline.</li>
+  <li><strong>Over-fetching for privacy.</strong> The 3x over-fetch works for a household (2&ndash;6 people). For a multi-tenant SaaS with thousands of users, the ratio would need to be much higher, or you'd need metadata filtering in the vector query itself.</li>
+  <li><strong>No structured metadata queries.</strong> You can't ask "show me all memories tagged as medical." The files are plain text. If you need faceted search, you need a separate index.</li>
+  <li><strong>Filesystem-scale limits.</strong> This works for household-scale data (hundreds to low thousands of files). At enterprise scale, you'd want a proper document store with the vector index as a read-through cache.</li>
+</ul>
+
+<p>
+  For the household use case, these are acceptable. The simplicity of "write a line to a file, everything else follows" is worth more than the flexibility of a custom pipeline.
+</p>
+
+<h2>The pattern</h2>
+
+<p>
+  If you're building a RAG system and your data is human-authored or human-readable, consider this architecture:
+</p>
+
+<ol>
+  <li><strong>Write to files</strong> (or any inspectable, versionable store). The write path should be boring &mdash; no embeddings, no async pipeline, no failure modes beyond storage I/O.</li>
+  <li><strong>Watch and index</strong> with a separate process. The indexer reads from the files and builds a vector index. It can crash, restart, or be replaced without data loss.</li>
+  <li><strong>Filter after retrieval</strong> using the data's natural structure (file paths, directories, naming conventions) rather than bolt-on metadata.</li>
+  <li><strong>Layer deterministic retrieval first</strong>, semantic search second. If information is critical (reminders, contacts, scheduled events), don't rely on embedding similarity to surface it.</li>
+  <li><strong>Make the semantic layer optional.</strong> If your system doesn't work without vector search, you've made vector search load-bearing. That's a choice, not a necessity.</li>
+</ol>
+
+<p>
+  The boring version of your architecture is usually the right one.
+</p>
+
+<div class="article-footer">
+  <p>
+    homeclaw is open source: <a href="https://github.com/Jayphen/homeclaw">github.com/Jayphen/homeclaw</a>.
+    memsearch is at <a href="https://github.com/zilliztech/memsearch">github.com/zilliztech/memsearch</a>.
+  </p>
+</div>
+
+</div>
+</body>
+</html>

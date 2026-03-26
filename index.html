@@ -4,27 +4,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Research — Jayphen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --border: #30363d;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --accent: #58a6ff;
-    --accent-hover: #79c0ff;
-    --tag-bg: #1f2937;
-    --tag-text: #9ca3af;
+    --bg: #FAF7F2;
+    --surface: #FFFFFF;
+    --border: #E5DFD6;
+    --text: #2C2A28;
+    --text-muted: #9E9790;
+    --accent: #2A7B9B;
+    --accent-hover: #1F6A87;
+    --accent-light: #E4F2F7;
+    --tag-bg: #E4F2F7;
+    --tag-text: #2A7B9B;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
 
   .container {
@@ -38,9 +43,11 @@
   }
 
   h1 {
+    font-family: 'Bricolage Grotesque', Georgia, serif;
     font-size: 28px;
-    font-weight: 600;
+    font-weight: 700;
     margin-bottom: 8px;
+    letter-spacing: -0.02em;
   }
 
   header p {
@@ -62,15 +69,17 @@
     padding: 20px 24px;
     text-decoration: none;
     color: var(--text);
-    transition: border-color 0.15s, transform 0.15s;
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
   }
 
   .item:hover {
     border-color: var(--accent);
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(44, 42, 40, 0.08);
   }
 
   .item-title {
+    font-family: 'Bricolage Grotesque', Georgia, serif;
     font-size: 17px;
     font-weight: 600;
     color: var(--accent);
@@ -100,6 +109,7 @@
     color: var(--tag-text);
     padding: 2px 8px;
     border-radius: 4px;
+    font-weight: 500;
   }
 
   .date {
@@ -119,6 +129,10 @@
     color: var(--accent);
     text-decoration: none;
   }
+
+  footer a:hover {
+    text-decoration: underline;
+  }
 </style>
 </head>
 <body>
@@ -129,6 +143,16 @@
   </header>
 
   <div class="items">
+    <a class="item" href="filesystem-rag-source-of-truth.html">
+      <div class="item-title">Why Your RAG's Source of Truth Shouldn't Be a Vector Database</div>
+      <div class="item-desc">Markdown files as source of truth, vector index as disposable cache. A case study from homeclaw on filesystem-first RAG with privacy-by-path, two-layer context, and graceful degradation.</div>
+      <div class="item-meta">
+        <span class="tag">RAG</span>
+        <span class="tag">architecture</span>
+        <span class="tag">homeclaw</span>
+        <span class="date">March 2026</span>
+      </div>
+    </a>
     <a class="item" href="eridanus-knowledge-context.html">
       <div class="item-title">Eridanus: Knowledge Context Surfacing</div>
       <div class="item-desc">How real-time meeting translation meets enterprise knowledge retrieval. An interactive course covering the KnowledgeSource interface, Glean integration, conversation state tracking, and the surfacing gate.</div>
