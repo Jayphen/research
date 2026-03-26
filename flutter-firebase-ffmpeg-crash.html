@@ -44,9 +44,9 @@
 <p>The error message says "Firebase init failed," so naturally I spent hours investigating Firebase:</p>
 
 <ul>
-  <li><strong>Signing keys.</strong> CI used an ephemeral debug keystore with an unregistered SHA-1 fingerprint. I set up proper release signing with the local debug keystore. Firebase native SDK started logging <code>FirebaseApp initialization successful</code>. But the Dart-side error persisted.</li>
-  <li><strong>Flutter version mismatch.</strong> Local was 3.38.2, CI was 3.41.5. I pinned, then upgraded. The error reproduced on both versions.</li>
-  <li><strong>google-services.json.</strong> Checked the config. Fine.</li>
+  <li><strong>Signing keys.</strong> CI used an ephemeral debug keystore whose SHA-1 wasn't registered in Firebase. I fixed this. The native SDK started logging <code>FirebaseApp initialization successful</code>, but the Dart-side error persisted.</li>
+  <li><strong>Flutter version mismatch.</strong> Local was 3.38.2, CI was 3.41.5. Pinned CI to match. Same error.</li>
+  <li><strong>google-services.json.</strong> Verified. Correct.</li>
   <li><strong>Plugin versions.</strong> Upgraded all Firebase packages to latest. Same error.</li>
 </ul>
 
@@ -77,7 +77,7 @@
 <span class="cm">Caused by:</span> <span class="st">java.lang.UnsatisfiedLinkError: Bad JNI version returned
   from JNI_OnLoad in "libffmpegkit_abidetect.so": 0</span></code></pre>
 
-<p>FFmpegKit's native library was crashing during <code>JNI_OnLoad</code>. And because Flutter's <code>GeneratedPluginRegistrant</code> registers all plugins in a single method call, one crash aborts the entire registration. Every plugin after FFmpegKit in alphabetical order never gets registered &mdash; including Firebase, which comes after FFmpeg.</p>
+<p>FFmpegKit's native library was crashing during <code>JNI_OnLoad</code>. Flutter's <code>GeneratedPluginRegistrant</code> registers all plugins in a single method call &mdash; alphabetically by package name. One unrecoverable crash aborts the entire registration. Every plugin registered after <code>ffmpeg_kit</code> never initialises. That includes <code>firebase_core</code>, <code>path_provider</code>, and everything else.</p>
 
 <h2>The dependency chain</h2>
 
@@ -90,17 +90,11 @@
 
 <p><code>whisper_ggml</code> uses FFmpegKit to convert audio formats (e.g., m4a to WAV) before passing them to Whisper. The native FFmpegKit library worked on older Flutter/Kotlin/Gradle combinations but broke with Flutter 3.41's Kotlin 2.2.20 and newer Android build tooling.</p>
 
-<h2>Why it only failed in deployed builds</h2>
+<h2>Why it hid for months</h2>
 
-<p>This is the cruelest part. The bug didn't manifest in local builds for months because:</p>
+<p>Local development was pinned to Flutter 3.38.2, which shipped with an older Kotlin version where FFmpegKit's JNI interface was compatible. CI used <code>channel: 'stable'</code>, which silently pulled Flutter 3.41.5 with Kotlin 2.2.20. The newer toolchain changed native linking behaviour, causing <code>JNI_OnLoad</code> to return an incompatible version.</p>
 
-<ol>
-  <li>Local development used Flutter 3.38.2, which shipped with an older Kotlin version where the JNI interface was compatible</li>
-  <li>CI used <code>channel: 'stable'</code>, which pulled Flutter 3.41.5 with Kotlin 2.2.20</li>
-  <li>The newer Kotlin/Gradle toolchain changed the native linking behavior, causing <code>JNI_OnLoad</code> to return an incompatible version</li>
-</ol>
-
-<p>When I upgraded local Flutter to 3.41.5, the bug reproduced immediately &mdash; on the emulator, in both debug and release mode. The "CI vs local" distinction was a red herring; it was purely a Flutter version issue.</p>
+<p>The moment I upgraded local Flutter to 3.41.5, the bug reproduced instantly &mdash; on the emulator, in both debug and release mode. The "CI vs local" framing was a red herring. It was always a Flutter version issue; I just hadn't been running the same version locally.</p>
 
 <h2>The fix</h2>
 
@@ -144,6 +138,10 @@
 <h3>5. Surface real errors early</h3>
 
 <p>The original code silently caught Firebase init failures and continued, leading to a confusing "No Firebase App [DEFAULT] has been created" error deep in the auth flow. Adding an error screen that displayed the actual <code>PlatformException</code> message cut the debugging loop from "deploy and check" to "read the screen."</p>
+
+<hr>
+
+<p>The whole investigation took most of a day. The fix was a one-line dependency swap. That's usually how it goes with native interop bugs &mdash; the hard part is never the fix, it's finding which layer lied to you.</p>
 
 <footer class="article-footer">
   <a href="https://github.com/Jayphen/research">Source on GitHub</a>
