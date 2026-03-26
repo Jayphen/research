@@ -1,0 +1,16 @@
+[
+  {
+    "slug": "filesystem-rag-source-of-truth",
+    "title": "Why Your RAG's Source of Truth Shouldn't Be a Vector Database",
+    "description": "Markdown files as source of truth, vector index as disposable cache. A case study from homeclaw on filesystem-first RAG with privacy-by-path, two-layer context, and graceful degradation.",
+    "tags": ["RAG", "architecture", "homeclaw"],
+    "date": "March 2026"
+  },
+  {
+    "slug": "eridanus-knowledge-context",
+    "title": "Eridanus: Knowledge Context Surfacing",
+    "description": "How real-time meeting translation meets enterprise knowledge retrieval. An interactive course covering the KnowledgeSource interface, Glean integration, conversation state tracking, and the surfacing gate.",
+    "tags": ["eridanus", "glean", "real-time"],
+    "date": "March 2026"
+  }
+]
